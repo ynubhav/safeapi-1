@@ -17,9 +17,7 @@ const APIProjectSchema = new mongoose.Schema({
 
   // Security controls
   allowedOrigins: [{ type: String }], // whitelisted client domains
-  publicRoutes: [{ type: String }], // open endpoints (no auth) // so that we know if to cache or not
-  privateRoutes: [{ type: String }], // require API key && auth
-
+  
   // Rate limiting settings
   rateLimit: { type: Number, min: 1, max: 100, default: 100 }, // requests per minute
 
