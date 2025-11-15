@@ -14,7 +14,10 @@ export function matchRoute(pattern, path) {
   try {
     const matcher = match(pattern, { decode: decodeURIComponent, end: true });
     const result = matcher(path);
-    if (!result) return { matched: false };
+    // console.log(result);
+    if (!result) 
+    return { matched: false };
+  // console.log({ matched: true, params: result.params })
     return { matched: true, params: result.params };
   } catch (err) {
     console.error("Route matching error:", err);
