@@ -7,6 +7,7 @@ import { APIKey } from "../models/Apikey.model.js";
 import { RequestLog } from "../models/Apilogs.model.js";
 import { Route } from "../models/Route.model.js";
 import { matchRoute } from "../utils/pathMatcher.js";
+import { Routes_cache } from "../cache/routes-cache.js";
 
 const gatewayRouter = express.Router();
 
@@ -27,7 +28,7 @@ gatewayRouter.use("/:projectId", async (req, res) => {
     // validate project
     const project = await APIProject.findOne({ projectId }).select(
       "originUrl status allowedOrigins"
-    );
+    );// bottle neck 1
     if (!project) {
       return res.status(404).json({ error: "Project not found" });
     }
@@ -43,7 +44,7 @@ gatewayRouter.use("/:projectId", async (req, res) => {
     const isApikey = await APIKey.findOneAndUpdate(
       { projectId, key: apiKey, keystatus: "active" },
       { lastUsed: Date.now() }
-    );
+    );// bottle neck 2
     if (!isApikey) {
       return res.status(403).json({ message: "Invalid/Disabled Apikey" });
     }
@@ -54,30 +55,48 @@ gatewayRouter.use("/:projectId", async (req, res) => {
     let isvalidRoute = false;
     let urlpath = "";
 
-    const initialCheck = await Route.findOne({
-      method,
-      path: incommingurl,
-      projectId,
-    });
-    const initTime3 = Date.now();
-    if (!initialCheck) {
-      const allroutes = await Route.find({ method, projectId });
+    // const initialCheck = await Route.findOne({
+    //   method,
+    //   path: incommingurl,
+    //   projectId,
+    // });
 
-      for (let i = 0; i < allroutes.length; i++) {
-        if (matchRoute(allroutes[i].path, incommingurl).matched) {
-          urlpath = allroutes[i].path;
-          isvalidRoute = true;
-          break;
-        }
-      }
-    } else {
-      isvalidRoute = true;
-      urlpath = initialCheck.path;
+    const initTime3 = Date.now();
+    // if (!initialCheck) {
+    //   const allroutes = await Route.find({ method, projectId });
+
+    //   for (let i = 0; i < allroutes.length; i++) {
+    //     if (matchRoute(allroutes[i].path, incommingurl).matched) {
+    //       urlpath = allroutes[i].path;
+    //       isvalidRoute = true;
+    //       break;
+    //     }
+    //   }
+    // } else {
+    //   isvalidRoute = true;
+    //   urlpath = initialCheck.path;
+    // }
+
+
+    const pathsarray = Routes_cache[projectId][method];
+    //console.log(pathsarray);
+    if (pathsarray.length==0) {
+      return res.status(404).json({ message: "Invalid Route/ProjectId" });
     }
-    const initTime4 = Date.now();
+
+    for (let i = 0; i < pathsarray.length; i++) {
+      if (matchRoute(pathsarray[i].path, incommingurl).matched) {
+        urlpath = pathsarray[i].path;
+        isvalidRoute = true;
+        console.log('hello12345')
+        break;
+      }
+    }
+
     if (!isvalidRoute) {
       return res.status(404).json({ message: "Invalid Route" });
     }
+    const initTime4 = Date.now();
     // console.log(RouteInfo);
 
     console.log(3);
@@ -121,11 +140,11 @@ gatewayRouter.use("/:projectId", async (req, res) => {
     }
     console.log(7);
     // send request
-
+    const timeb4req = Date.now();
     const response = await axios(config);
     console.log(8);
     // forward response
-    const timeb4req = Date.now();
+
     res.status(response.status).set(response.headers).send(response.data);
     const finalTime = Date.now();
     //console.log(9);
