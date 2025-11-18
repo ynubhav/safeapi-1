@@ -7,6 +7,14 @@ import { User } from "../models/User.model.js";
 import { Route } from "../models/Route.model.js";
 import { normalizePath, hasCollision } from "../utils/routeMatch.js";
 
+import {
+  CreateManyRoutesCache,
+  CreateRouteCache,
+  deleteRouteCache,
+  ProjectDeletion,
+  UpdateRouteCache,
+} from "../cache/update-route-cache.js";
+
 const projectRouter = express.Router();
 
 projectRouter.post("/", authUser, async (req, res) => {
@@ -121,6 +129,9 @@ projectRouter.delete("/:projectId", authUser, async (req, res) => {
     const UserPrjRem = await User.findByIdAndUpdate(userId, {
       $pull: { projects: GetProject_id._id },
     });
+    // remove from cache
+    ProjectDeletion(projectId);
+
     res.status(200).json({ message: "Deletion Successfull" });
   } catch (error) {
     console.log(error);
@@ -159,6 +170,9 @@ projectRouter.post("/:projectId/route", authUser, async (req, res) => {
       cacheTTL,
       description,
     });
+    // create route cache
+    CreateRouteCache(newRoute, projectId);
+
     res.status(201).json({ message: "Route created successfully", newRoute });
   } catch (err) {
     console.error(err);
@@ -177,6 +191,10 @@ projectRouter.patch(
       const { authRequired, cacheEnabled, cacheTTL, description } = req.body;
       const projectfound = await APIProject.findOne({ projectId, userId });
       if (projectfound) {
+        const InitialRoute = await Route.findOne({
+          projectId,
+          _id: routeId,
+        });
         const updateRoute = await Route.findOneAndUpdate(
           {
             projectId,
@@ -187,8 +205,11 @@ projectRouter.patch(
             cacheEnabled,
             cacheTTL,
             description,
-          }
+          },
+          { new: true }
         );
+        //update in cache
+        UpdateRouteCache(projectId, InitialRoute, updateRoute);
         return res.status(200).json({ message: "Route updated" });
       } else {
         res.status(404).json({ message: "Project Not Found" });
@@ -210,10 +231,17 @@ projectRouter.delete(
       const userId = req.user._id;
       const projectfound = await APIProject.find({ projectId });
       if (projectfound.length == 1) {
+        const foundRoute = await Route.findOne({
+          projectId,
+          _id: routeId,
+        });
         const findRoute = await Route.findOneAndDelete({
           projectId,
           _id: routeId,
         });
+        //delete from cache
+        deleteRouteCache(projectId, foundRoute);
+
         return res.status(200).json({ message: "Route deleted" });
       } else {
         res.status(404).json({ message: "Project Not Found" });
@@ -267,14 +295,14 @@ projectRouter.post("/:projectId/bulk-routes", authUser, async (req, res) => {
       if (seen[method][normalized]) {
         return res.status(409).json({
           error: "Route collision inside payload",
-          conflict: { method, path: r.path }
+          conflict: { method, path: r.path },
         });
       }
 
       seen[method][normalized] = true;
       r.normalizedPath = normalized; // add it for DB insert
     }
-    
+
     // fetch existing routes of that project of same methods
     const methods = [...new Set(routes.map((r) => r.method))];
 
@@ -307,6 +335,9 @@ projectRouter.post("/:projectId/bulk-routes", authUser, async (req, res) => {
 
     // Save all to DB
     const saved = await Route.insertMany(newRoutesToInsert);
+
+    //update cache
+    CreateManyRoutesCache(newRoutesToInsert, projectId);
 
     return res.status(201).json({
       message: "Routes registered successfully",
