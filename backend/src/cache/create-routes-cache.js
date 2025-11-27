@@ -21,7 +21,7 @@ const create_routes_cache = async () => {
       });
     }
     Routes_cache.__meta = { updatedAt: Date.now() };
-    console.log("ROUTES CACHE CREATION SUCCCESSFULL ✅");
+    console.log("✅ ROUTES CACHE CREATION SUCCCESSFULL");
   } catch (error) {
     console.log("ERROR CREATING ROUTES CACHE");
   }
